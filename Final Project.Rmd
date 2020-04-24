@@ -26,7 +26,7 @@ output:
 - completed: Flag indicating whether the user completed the order (sent an eCard)
 - holiday: Flag indicating whether at least one completed order included a holiday themed card
 
-```{r}
+```{r, warning = FALSE, message=FALSE}
 # Import libraries
 library(plyr)
 library(ggplot2)
@@ -40,7 +40,7 @@ ltv.data <- read.csv('ltv.csv')
 head(ltv.data)
 ```
 
-```{r}
+```{r,warning = FALSE, message=FALSE}
 ltv.data <- ltv.data %>% mutate_at(vars(id, status, gender, entered, completed, holiday), funs(as.factor(.)))
 ltv.data$date <- as.Date(ltv.data$date, '%d/%m/%y')
 summary(ltv.data)
