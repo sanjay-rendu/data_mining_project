@@ -1,0 +1,113 @@
+---
+title: "Final Project"
+author: "Sanjay Renduchintala (vrenduch)"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    theme: cerulean
+    highlight: tango
+---
+
+### Problem Summary:
+
+1. Develop an **attrition model**, to predict whether a customer will cancel their subscription in the near future. Characterize your model performance.
+2. Develop a model for estimating the **ltv** of a customer. Characterize your model performance.
+3. Develop a **customer segmentation** scheme. Include in this scheme the identification of sleeping customers, those that are no longer active but have not canceled their account.
+
+#### About the dataset:
+- id: A unique user identifier
+- status: Subscription status:‘0’- new, ‘1’- open, ‘2’- cancelation event
+- gender: User gender ‘M’- male ‘F’- female
+- date: Date of in which user ‘id’ logged into the site
+- pages: Number of pages visted by user ‘id’ on date ‘date’
+- onsite: Number of minutes spent on site by user ‘id’ on date ‘date’
+- entered: Flag indicating whether or not user entered the send order path on date ‘date’
+- completed: Flag indicating whether the user completed the order (sent an eCard)
+- holiday: Flag indicating whether at least one completed order included a holiday themed card
+
+```{r}
+# Import libraries
+library(plyr)
+library(ggplot2)
+library(dplyr)
+```
+
+### 1. Exploratory Data Analysis
+
+```{r}
+ltv.data <- read.csv('ltv.csv')
+head(ltv.data)
+```
+
+```{r}
+ltv.data <- ltv.data %>% mutate_at(vars(id, status, gender, entered, completed, holiday), funs(as.factor(.)))
+ltv.data$date <- as.Date(ltv.data$date, '%d/%m/%y')
+summary(ltv.data)
+```
+
+#### 1.1. Missing values
+
+```{r}
+sapply(ltv.data, function(x) sum(is.na(x)))
+```
+**Observation:** There are no missing values in the data
+
+#### 1.2. Extreme values
+
+```{r}
+hist(ltv.data$pages)
+hist(ltv.data$onsite)
+```
+**Observation**: 'Onsite' has some extreme values
+
+```{r}
+# Quantiles
+quantile(ltv.data$onsite, c(0,.1,.25,.5,.75,.9,.95,.99,1))
+```
+
+**Action:** Drop observations where user has spent more than 60 minutes on the website
+
+#### 1.3. Summary of the data
+
+```{r}
+ltv.data <- ltv.data[ltv.data$onsite<=60,]
+summary(ltv.data)
+```
+
+
+```{r}
+# Number of users
+print(paste0("Number of users: " , n_distinct(ltv.data$id)))
+
+# Number of users by gender
+print("Users by gender:")
+print.data.frame(ltv.data %>% group_by(gender) %>% summarise(count = n_distinct(id)))
+
+```
+
+```{r}
+# Attrition
+att.summ <- ltv.data %>% mutate(month = format(date, "%m"), year = format(date, "%Y")) %>% group_by(year, status) %>% summarise(count = n_distinct(id))
+
+att.summ$status <- mapvalues(att.summ$status, 
+          from=c(0,1,2), 
+          to=c("new","open","cancelled"))
+
+ggplot(att.summ, aes(x = year, y = count,fill=status)) +
+    geom_bar(stat='identity')
+```
+
+```{r}
+# Life time value - top 10 customers with max. number of completed transactions
+user_com <- ltv.data %>% filter(completed=="1") %>% group_by(id) %>% tally(sort = T)
+head(user_com, 10)
+```
+
+### 2. Modeling
+
+
+### 3. Key Findings
+
+
+
