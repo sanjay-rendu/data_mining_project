@@ -1,5 +1,5 @@
 ---
-title: "Final Project"
+title: "Customer Segmentation"
 author: "Sanjay Renduchintala (vrenduch)"
 output: 
   html_document:
@@ -11,9 +11,9 @@ output:
 
 ### Problem Summary:
 
-1. Develop an **attrition model**, to predict whether a customer will cancel their subscription in the near future. Characterize your model performance.
-2. Develop a model for estimating the **ltv** of a customer. Characterize your model performance.
-3. Develop a **customer segmentation** scheme. Include in this scheme the identification of sleeping customers, those that are no longer active but have not canceled their account.
+(.) 1. Develop an **attrition model**, to predict whether a customer will cancel their subscription in the near future. Characterize your model performance.
+(.) 2. Develop a model for estimating the **ltv** of a customer. Characterize your model performance.
+(✓) 3. Develop a **customer segmentation** scheme. Include in this scheme the identification of sleeping customers, those that are no longer active but have not canceled their account.
 
 #### About the dataset:
 - id: A unique user identifier
@@ -31,6 +31,9 @@ output:
 library(plyr)
 library(ggplot2)
 library(dplyr)
+library(reshape2)
+library(cluster)
+library(factoextra)
 ```
 
 ### 1. Exploratory Data Analysis
@@ -66,14 +69,16 @@ hist(ltv.data$onsite)
 quantile(ltv.data$onsite, c(0,.1,.25,.5,.75,.9,.95,.99,1))
 ```
 
-**Action:** Drop observations where user has spent more than 60 minutes on the website
+**Action:** Cap observations where user has spent more than 60 minutes on the website to 60 minutes
 
-#### 1.3. Summary of the data
+#### 1.3. Cap obervations where user spent more then 60 minutes to 60 minutes
 
 ```{r}
-ltv.data <- ltv.data[ltv.data$onsite<=60,]
+ltv.data[ltv.data$onsite>60,"onsite"] <- 60
 summary(ltv.data)
 ```
+
+#### 1.4. Gender and Tenure
 
 
 ```{r}
@@ -99,15 +104,172 @@ ggplot(att.summ, aes(x = year, y = count,fill=status)) +
 ```
 
 ```{r}
-# Life time value - top 10 customers with max. number of completed transactions
-user_com <- ltv.data %>% filter(completed=="1") %>% group_by(id) %>% tally(sort = T)
-head(user_com, 10)
+# Customer tenure
+tenure <- dcast(ltv.data[ltv.data$status != 1,], id ~ status, value.var = 'date')
+tenure[,2] <- as.Date(tenure[,2],origin = "1970-01-01")
+tenure[,3] <- as.Date(tenure[,3], origin = "1970-01-01")
+tenure$tenure <- as.integer(tenure[,3] - tenure[,2]) 
+hist(tenure$tenure)
+tenure$is.attr <- "yes"
+tenure[is.na(tenure$tenure),]$is.attr <- "no"
+tenure[is.na(tenure$tenure),]$tenure <- as.Date("2014-12-31") - tenure[is.na(tenure$tenure),2]
+tenure[is.na(tenure$tenure),]$tenure <- tenure[is.na(tenure$tenure),3] - as.Date("2011-01-01")
+tenure %>%
+  ggplot(aes(x = tenure, fill = is.attr))+
+  geom_histogram(position = "stack")
+
+summary(tenure$tenure)
+
+tapply(tenure$tenure, tenure$is.attr, summary)
+
 ```
 
-### 2. Modeling
+
+### 2. Clustering - Feature engineering 
+
+```{r}
+# List of cancelled customers
+attr.list <- ltv.data %>% group_by(id) %>% summarise(final.status = max(as.integer(as.character(status))))
+attr.list <- attr.list$id[attr.list$final.status == 2]
+```
+
+```{r}
+# Last seen
+
+last.seen <- ltv.data %>% group_by(id) %>% summarise(diff= as.integer(as.Date("31/12/2014", "%d/%m/%Y")- max(date)))
+
+hist(last.seen$diff)
+```
+
+```{r}
+# Interarrival time
+ltv.data.copy <- ltv.data[order(ltv.data$id, ltv.data$date),]
+ltv.data.copy <- ltv.data.copy[!(ltv.data.copy$id %in% attr.list),]
+ltv.data.copy$id.lag <- lag(ltv.data.copy$id,1)
+ltv.data.copy$date.lag <- lag(ltv.data.copy$date,1)
+ltv.data.copy$time.since.last.event <- ltv.data.copy$date - ltv.data.copy$date.lag
+ltv.data.copy$time.since.last.event[ltv.data.copy$id != ltv.data.copy$id.lag] <- NA
+
+frequency <- ltv.data.copy %>% group_by(id) %>% summarise(last.seen.days= as.integer(as.Date("31/12/2014", "%d/%m/%Y")- max(date)), last.seen = max(date),
+                                                          num.freq = length(which(!is.na(time.since.last.event))),
+                                                          min.freq = as.integer(min(time.since.last.event, na.rm = TRUE)), 
+                                                          max.freq = as.integer(max(time.since.last.event, na.rm = TRUE)), 
+                                                          q1.freq = as.integer(quantile(time.since.last.event, probs = 0.25,na.rm = TRUE)), 
+                                                          q3.freq = as.integer(quantile(time.since.last.event, probs = 0.75,na.rm = TRUE)),
+                                                          avg.freq = as.integer(mean(time.since.last.event, na.rm = TRUE)),
+                                                          perctentile.last.seen = sum(time.since.last.event <= last.seen.days, 
+                                                                                      na.rm = TRUE)/length(which(!is.na(time.since.last.event))))
+```
+
+
+```{r}
+frequency <- merge(x= frequency, y = tenure[,c('id', 'tenure')], by= 'id', all.x = TRUE)
+summary(frequency)
+```
+
+### 3. Clustering
+
+#### 3.1. Hierarchical Clustering
+
+```{r}
+frequency <- na.omit(frequency)
+clust.data <- scale(frequency[,c(2,4,10,11)])
+clusters <- hclust(dist(clust.data))
+plot(clusters)
+```
+```{r}
+# Split to 10 groups and compare groups
+frequency$hclust.groups <- cutree(clusters, k=10)
+```
+
+```{r}
+agg.data <- frequency %>% group_by(hclust.groups) %>% summarise(avg.perc.last.seen = mean(perctentile.last.seen, na.rm = TRUE),
+                                                             avg.last.seen.days = mean(last.seen.days), na.rm = TRUE,
+                                                             avg.tenure = mean(tenure, na.rm = TRUE), 
+                                                             avg.total.freq = mean(num.freq, na.rm = TRUE))
+ggplot(agg.data, aes(x=hclust.groups, y= avg.perc.last.seen)) + 
+  geom_line()
+ggplot(agg.data, aes(x=hclust.groups, y= avg.last.seen.days)) + 
+  geom_line()
+ggplot(agg.data, aes(x=hclust.groups, y= avg.tenure)) + 
+  geom_line()
+ggplot(agg.data, aes(x=hclust.groups, y= avg.total.freq)) + 
+  geom_line()
+
+```
+
+Observation: There are groups with distinct features emerging from the analysis but some groups maybe sparsely populated
+
+```{r}
+frequency %>% group_by(hclust.groups) %>% summarise(n= length(id)) %>% arrange(desc(n))
+```
+
+Obervation: There are six groups with more than 100 observations; top 3 groups cover ~80% and top 4 cover ~90% of the ids
+
+#### 3.2. Mean Shift
+
+```{r}
+library(meanShiftR)
+ms.result <- meanShift(na.omit(clust.data))
+frequency$ms.groups <- ms.result$assignment
+```
+
+```{r}
+frequency %>% group_by(ms.groups)  %>% summarise(n= length(id)) %>% arrange(desc(n))
+```
+
+Observation: Top 3 groups contain ~85% of the ids
+
+#### 3.3. K-means clustering and selection of K
+
+```{r}
+clust.data <- scale(frequency[,c(2,4,9,10,11)])
+```
+
+```{r}
+# Elbow method using sum of squares
+fviz_nbclust(clust.data, kmeans, method = "wss")
+```
+
+
+```{r}
+# average silhouette for k clusters
+fviz_nbclust(clust.data, kmeans, method = "silhouette")
+```
+
+
+```{r}
+set.seed(123456)
+km.clusters <- kmeans(clust.data, centers = 3, nstart = 25)
+frequency$km.groups <- km.clusters$cluster
+
+
+agg.data <- frequency %>% group_by(km.groups) %>% summarise(avg.perc.last.seen = mean(perctentile.last.seen, na.rm = TRUE),
+                                                             avg.last.seen.days = mean(last.seen.days, na.rm = TRUE),
+                                                             avg.tenure = mean(tenure, na.rm = TRUE), 
+                                                             avg.total.freq = mean(num.freq, na.rm = TRUE))
+
+ggplot(agg.data, aes(x=km.groups, y= avg.perc.last.seen)) + 
+  geom_line()
+ggplot(agg.data, aes(x=km.groups, y= avg.last.seen.days)) + 
+  geom_line()
+ggplot(agg.data, aes(x=km.groups, y= avg.tenure)) + 
+  geom_line()
+ggplot(agg.data, aes(x=km.groups, y= avg.total.freq)) + 
+  geom_line()
+```
 
 
 ### 3. Key Findings
 
+* Results from Hierarchical Clustering, Meanshift, and K-means clusters suggests that there are 3 major clusters in the data
 
-
+* Variables used for clustering: 
+  1) Percentile last seen: Percentile of Last seen days in the distribution of inter-arrival time of the customer
+  2) Last seen days: Number of days from last activity till end of observation period
+  3) Tenure: Number of days the ID was on the system in the observation period
+  4) Total Freq: Number of activities in the observation peroid
+  
+  (Observation peroid was between 1/1/2011 to 12/31/2014)
+  
+* Group 1 from the above K-means clustering results can be identified "sleeping customers". These 210 customers had a long tenure in the observation period but haven't visited the website recently. These accounts are dormant but haven't been cancelled yet.
