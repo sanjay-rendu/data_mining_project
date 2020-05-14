@@ -9,7 +9,7 @@ output:
     highlight: tango
 ---
 
-### Problem Summary:
+### 0. Problem Summary
 
 (.) 1. Develop an **attrition model**, to predict whether a customer will cancel their subscription in the near future. Characterize your model performance.
 (.) 2. Develop a model for estimating the **ltv** of a customer. Characterize your model performance.
@@ -125,7 +125,7 @@ tapply(tenure$tenure, tenure$is.attr, summary)
 ```
 
 
-### 2. Clustering - Feature engineering 
+### 2. Feature engineering 
 
 ```{r}
 # List of cancelled customers
@@ -260,7 +260,7 @@ ggplot(agg.data, aes(x=km.groups, y= avg.total.freq)) +
 ```
 
 
-### 3. Key Findings
+### 4. Key Findings
 
 * Results from Hierarchical Clustering, Meanshift, and K-means clusters suggests that there are 3 major clusters in the data
 

@@ -425,16 +425,16 @@ summary {
 
 <div id="TOC">
 <ul>
-<li><a href="#problem-summary">Problem Summary:</a></li>
+<li><a href="#problem-summary">0. Problem Summary</a></li>
 <li><a href="#exploratory-data-analysis">1. Exploratory Data Analysis</a></li>
-<li><a href="#clustering---feature-engineering">2. Clustering - Feature engineering</a></li>
+<li><a href="#feature-engineering">2. Feature engineering</a></li>
 <li><a href="#clustering">3. Clustering</a></li>
-<li><a href="#key-findings">3. Key Findings</a></li>
+<li><a href="#key-findings">4. Key Findings</a></li>
 </ul>
 </div>
 
 <div id="problem-summary" class="section level3">
-<h3>Problem Summary:</h3>
+<h3>0. Problem Summary</h3>
 <p>(.) 1. Develop an <strong>attrition model</strong>, to predict whether a customer will cancel their subscription in the near future. Characterize your model performance. (.) 2. Develop a model for estimating the <strong>ltv</strong> of a customer. Characterize your model performance. (✓) 3. Develop a <strong>customer segmentation</strong> scheme. Include in this scheme the identification of sleeping customers, those that are no longer active but have not canceled their account.</p>
 <div id="about-the-dataset" class="section level4">
 <h4>About the dataset:</h4>
@@ -581,8 +581,8 @@ summary {
 ##     0.0   360.0   569.0   604.8   822.0  1457.0</code></pre>
 </div>
 </div>
-<div id="clustering---feature-engineering" class="section level3">
-<h3>2. Clustering - Feature engineering</h3>
+<div id="feature-engineering" class="section level3">
+<h3>2. Feature engineering</h3>
 <div class="sourceCode" id="cb28"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb28-1" data-line-number="1"><span class="co"># List of cancelled customers</span></a>
 <a class="sourceLine" id="cb28-2" data-line-number="2">attr.list &lt;-<span class="st"> </span>ltv.data <span class="op">%&gt;%</span><span class="st"> </span><span class="kw">group_by</span>(id) <span class="op">%&gt;%</span><span class="st"> </span><span class="kw">summarise</span>(<span class="dt">final.status =</span> <span class="kw">max</span>(<span class="kw">as.integer</span>(<span class="kw">as.character</span>(status))))</a>
 <a class="sourceLine" id="cb28-3" data-line-number="3">attr.list &lt;-<span class="st"> </span>attr.list<span class="op">$</span>id[attr.list<span class="op">$</span>final.status <span class="op">==</span><span class="st"> </span><span class="dv">2</span>]</a></code></pre></div>
@@ -748,7 +748,7 @@ summary {
 </div>
 </div>
 <div id="key-findings" class="section level3">
-<h3>3. Key Findings</h3>
+<h3>4. Key Findings</h3>
 <ul>
 <li><p>Results from Hierarchical Clustering, Meanshift, and K-means clusters suggests that there are 3 major clusters in the data</p></li>
 <li>Variables used for clustering:
